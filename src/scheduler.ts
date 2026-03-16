@@ -69,6 +69,16 @@ export async function processTicket(options: {
   try {
     if (lastResult?.success) {
       await provider.transitionStatus(ticket.id, config.linear.statuses.done);
+
+      const output = lastNLines(lastResult.output ?? "", 50);
+      const comment = [
+        "## Agent Worker Completed",
+        "",
+        "Task completed successfully.",
+        ...(output ? ["", "**Output (last 50 lines):**", "```", output, "```"] : []),
+      ].join("\n");
+      await provider.postComment(ticket.id, comment);
+
       logger.info("Ticket completed", { ticketId: ticket.identifier });
     } else {
       await provider.transitionStatus(ticket.id, config.linear.statuses.failed);

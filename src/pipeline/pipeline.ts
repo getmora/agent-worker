@@ -8,6 +8,7 @@ export type PipelineResult = {
   success: boolean;
   stage?: "pre-hook" | "claude" | "post-hook";
   error?: string;
+  output?: string;
 };
 
 export async function executePipeline(options: {
@@ -59,5 +60,5 @@ export async function executePipeline(options: {
     }
   }
 
-  return { success: true };
+  return { success: true, output: claudeResult.output };
 }

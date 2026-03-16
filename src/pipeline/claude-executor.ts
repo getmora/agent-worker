@@ -7,6 +7,34 @@ export type ExecutorResult = {
   exitCode: number | null;
 };
 
+async function streamToLines(
+  stream: ReadableStream<Uint8Array>,
+  onLine: (line: string) => void
+): Promise<string> {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  const chunks: string[] = [];
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    const text = decoder.decode(value, { stream: true });
+    chunks.push(text);
+    buffer += text;
+
+    const lines = buffer.split("\n");
+    buffer = lines.pop()!;
+    for (const line of lines) {
+      if (line.trim()) onLine(line);
+    }
+  }
+
+  if (buffer.trim()) onLine(buffer);
+  return chunks.join("");
+}
+
 export async function runClaude(
   prompt: string,
   cwd: string,
@@ -27,11 +55,19 @@ export async function runClaude(
     proc.kill();
   }, timeoutMs);
 
+  // Stream stdout and stderr in real-time
+  const [stdout, stderr] = await Promise.all([
+    streamToLines(proc.stdout as ReadableStream<Uint8Array>, (line) => {
+      logger.info("claude", { stream: "stdout", line });
+    }),
+    streamToLines(proc.stderr as ReadableStream<Uint8Array>, (line) => {
+      logger.info("claude", { stream: "stderr", line });
+    }),
+  ]);
+
   const exitCode = await proc.exited;
   clearTimeout(timer);
 
-  const stdout = await new Response(proc.stdout).text();
-  const stderr = await new Response(proc.stderr).text();
   const output = (stdout + "\n" + stderr).trim();
 
   if (timedOut) {
@@ -44,8 +80,6 @@ export async function runClaude(
   } else {
     logger.info("Claude Code completed successfully");
   }
-
-  logger.debug("Claude Code output", { output: output.slice(0, 2000) });
 
   return { success: exitCode === 0, output, timedOut: false, exitCode };
 }
