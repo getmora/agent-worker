@@ -1,13 +1,36 @@
 # agent-worker
 
-A CLI tool that polls Linear for ready tickets and dispatches them to Claude Code for autonomous implementation.
+An autonomous worker agent that picks up tasks from your issue tracker and completes them — without you in the loop.
 
 ![Agent Worker Demo](assets/demo.png)
+
+## Thesis
+
+The way to scale with AI agents is to get out of the loop. Stop babysitting. Stop copy-pasting tickets into chat windows. Define the work, assign it to the agent, and walk away.
+
+**agent-worker** is a polling-based worker that watches your issue tracker for assigned tasks, claims them, executes an agent harness to do the work, and reports results back. You stay out of the loop entirely.
+
+### Why polling?
+
+Webhook-based agent orchestrators like OpenClaw require you to expose ports and endpoints to the internet. That's a security surface you don't need. The polling pattern is simpler and more secure — your agent reaches out on its own schedule, nothing reaches in. This scales from a single agent on your laptop to hundreds of workers across many repos and projects without any additional infrastructure.
+
+### Hooks: deterministic guardrails around non-deterministic agents
+
+Agents are powerful but non-deterministic. Pre and post hooks let you wrap agent execution with deterministic, auditable steps — checking out a branch, running tests, linting, pushing code. The agent does the creative work; hooks enforce the process.
+
+### Agent-harness agnostic
+
+agent-worker is not tied to a single agent. It supports any agent harness that can accept a prompt and return a result. Currently supported:
+
+- **Claude Code** — Anthropic's CLI agent
+- **Codex** — OpenAI's CLI agent
+
+Adding a new harness is a single file implementing the executor interface.
 
 ## Prerequisites
 
 - [Bun](https://bun.sh) 1.0+
-- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated
+- An agent harness installed and authenticated (Claude Code or Codex)
 - A Linear account with a personal API key
 
 ## Installation
@@ -54,19 +77,19 @@ repo:
   path: "/path/to/your/repo"          # Absolute path to the working repository
 
 hooks:
-  pre:                                # Commands to run before Claude Code (optional)
+  pre:                                # Commands to run before the agent (optional)
     - "git checkout main"
     - "git pull origin main"
     - "git checkout -b agent/task-{id}"
 
-  post:                               # Commands to run after Claude Code succeeds (optional)
+  post:                               # Commands to run after the agent succeeds (optional)
     - "bun run test"
     - "git add -A"
     - "git commit -m 'feat: {title}'"
     - "git push origin agent/task-{id}"
 
 claude:
-  timeout_seconds: 300                # Max time for Claude Code to complete
+  timeout_seconds: 300                # Max time for the agent to complete
   retries: 0                          # Retry attempts on failure (0–3)
 
 log:
@@ -91,14 +114,14 @@ The worker runs as a foreground process and handles SIGINT/SIGTERM for graceful 
 
 ## How it works
 
-1. **Poll** — Query Linear for tickets in the `ready` status on the configured interval.
-2. **Claim** — Transition the ticket to `in_progress` to prevent duplicate processing.
-3. **Pre-hooks** — Run pre-hook commands sequentially in the repository directory. If any command fails, the pipeline aborts.
-4. **Claude Code** — Invoke Claude Code with the ticket title and description as the prompt. If it times out or exits non-zero, the pipeline fails.
-5. **Post-hooks** — Run post-hook commands sequentially. If any command fails, the pipeline fails.
-6. **Update status** — On success, transition the ticket to `done`. On failure, transition to `failed` and post a comment with the stage, command, and output.
+1. **Poll** — Watch Linear for tickets in the `ready` status on a configurable interval.
+2. **Claim** — Transition the ticket to `in_progress` so no other worker picks it up.
+3. **Pre-hooks** — Run deterministic setup commands in the repo directory (e.g. check out a fresh branch).
+4. **Agent execution** — Hand the ticket to your configured agent harness. The agent reads the task description and does the work autonomously.
+5. **Post-hooks** — Run deterministic verification commands (e.g. tests, linting, push).
+6. **Report** — On success, mark the ticket `done`. On failure, mark it `failed` and post a comment with the failure details.
 
-One ticket is processed at a time. After a ticket completes (or fails), the worker returns to polling.
+One ticket is processed at a time. After completion, the worker returns to polling.
 
 ## Development
 
