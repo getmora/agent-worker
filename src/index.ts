@@ -1,5 +1,6 @@
 import { loadConfig } from "./config.ts";
 import { createLogger } from "./logger.ts";
+import { printSplash } from "./format.ts";
 import { createLinearProvider } from "./providers/linear.ts";
 import { createPoller } from "./poller.ts";
 import { processTicket } from "./scheduler.ts";
@@ -45,9 +46,12 @@ function main() {
     },
   });
 
+  printSplash(config.executor.type);
+
   logger.info("Agent Worker started", {
     projectId: config.linear.project_id,
     pollInterval: config.linear.poll_interval_seconds,
+    executor: config.executor.type,
   });
 
   process.on("SIGINT", () => {
