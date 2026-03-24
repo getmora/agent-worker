@@ -9,11 +9,18 @@ export function createCodexExecutor(): CodeExecutor {
     async run(prompt: string, cwd: string, timeoutMs: number, logger: Logger): Promise<ExecutorResult> {
       logger.info("Codex started", { timeoutMs });
 
-      const proc = Bun.spawn(["codex", "exec", "--full-auto", prompt], {
-        cwd,
-        stdout: "pipe",
-        stderr: "pipe",
-      });
+      let proc;
+      try {
+        proc = Bun.spawn(["codex", "exec", "--full-auto", prompt], {
+          cwd,
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.error("Failed to start Codex", { error: msg });
+        return { success: false, output: msg, timedOut: false, exitCode: null };
+      }
 
       let timedOut = false;
       const timer = setTimeout(() => {
