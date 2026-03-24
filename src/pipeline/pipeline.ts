@@ -1,4 +1,5 @@
 import { join } from "path";
+import { readFileSync } from "fs";
 import { tmpdir } from "os";
 import type { Logger } from "../logger.ts";
 import type { Ticket } from "../providers/types.ts";
@@ -111,8 +112,15 @@ export async function executePipeline(options: {
       }
     }
 
-    // Code executor
-    const prompt = `GitHub Issue #${ticket.identifier}: ${ticket.title}\n\n${ticket.description || "No description provided."}`;
+    // Code executor — use prompt file from inject-agent-context if available
+    const promptFile = join(effectiveCwd, `.prompt-${ticket.identifier}.md`);
+    let prompt: string;
+    try {
+      prompt = readFileSync(promptFile, "utf-8");
+      logger.info("Using injected prompt file", { promptFile });
+    } catch {
+      prompt = `GitHub Issue #${ticket.identifier}: ${ticket.title}\n\n${ticket.description || "No description provided."}`;
+    }
     const execResult = await executor.run(prompt, effectiveCwd, timeoutMs, logger);
     if (!execResult.success) {
       const reason = execResult.timedOut
