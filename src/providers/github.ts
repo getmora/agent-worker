@@ -65,6 +65,13 @@ export function createGitHubProvider(options: {
     },
 
     async transitionStatus(ticketId: string, statusName: string): Promise<void> {
+      // Map status to project board column name
+      const boardStatus: Record<string, string> = {
+        "in-progress": "In progress",
+        "done": "Done",
+        "failed": "Failed",
+      };
+
       switch (statusName) {
         case "in-progress": {
           const { exitCode, stderr } = await gh([
@@ -86,7 +93,7 @@ export function createGitHubProvider(options: {
           break;
         }
         case "failed": {
-          const { exitCode: rmCode } = await gh([
+          await gh([
             "issue", "edit", ticketId,
             "--repo", repo,
             "--remove-label", "in-progress",
@@ -102,6 +109,26 @@ export function createGitHubProvider(options: {
         }
         default:
           throw new Error(`Unknown status: ${statusName}`);
+      }
+
+      // Sync project board status (best-effort, don't fail on error)
+      const projectStatus = boardStatus[statusName];
+      if (projectStatus) {
+        const scriptPath = process.env.VAULT_DIR
+          ? `${process.env.VAULT_DIR}/hooks/lib/project-board.sh`
+          : null;
+        if (scriptPath) {
+          try {
+            const proc = Bun.spawn(["bash", "-c", `source "${scriptPath}" && set_project_status "${ticketId}" "${projectStatus}"`], {
+              env: { ...process.env, GITHUB_REPO: repo },
+              stdout: "pipe",
+              stderr: "pipe",
+            });
+            await proc.exited;
+          } catch {
+            // Best-effort — don't fail the transition if board sync fails
+          }
+        }
       }
     },
 
