@@ -18,7 +18,7 @@ export function printSplash(version: string): void {
   if (!isTTY) return;
 
   const title = `Agent Worker  v${version}`;
-  const subtitle = "Linear → Claude Code pipeline";
+  const subtitle = "GitHub Issues → Claude Code pipeline";
   const width = Math.max(title.length, subtitle.length) + 4;
 
   const top = `  ╔${"═".repeat(width)}╗`;
