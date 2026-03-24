@@ -51,7 +51,7 @@ export function createGitHubProvider(options: {
           const labelNames = issue.labels.map((l) => l.name);
           return (
             !labelNames.includes("done") &&
-            !labelNames.includes("needs-approval") &&
+            !labelNames.includes("needs-review") &&
             !labelNames.includes("in-progress") &&
             !labelNames.includes("failed")
           );

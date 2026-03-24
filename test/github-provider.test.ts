@@ -64,9 +64,9 @@ describe("GitHubProvider", () => {
       });
     });
 
-    test("excludes issues with needs-approval label", () => {
+    test("excludes issues with needs-review label", () => {
       const issues = [
-        { number: 1, title: "Pending", body: "", labels: [{ name: "agent:marketing" }, { name: "needs-approval" }] },
+        { number: 1, title: "Pending", body: "", labels: [{ name: "agent:marketing" }, { name: "needs-review" }] },
       ];
       spawnSpy = mockSpawn([{ stdout: JSON.stringify(issues), stderr: "", exitCode: 0 }]);
 
