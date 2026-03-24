@@ -20,7 +20,7 @@ export async function runHooks(
 
     const proc = Bun.spawn(["sh", "-c", command], {
       cwd,
-      env: { ...process.env },
+      env: { ...process.env, VAULT_DIR: cwd },
       stdout: "pipe",
       stderr: "pipe",
     });
