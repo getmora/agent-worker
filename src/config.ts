@@ -103,6 +103,47 @@ export function loadConfig(filePath: string): Config {
   // Determine vault root for hook resolution
   const vaultRoot = parsed.repo?.path || resolve(configDir, "..", "..");
 
+  // Read frontmatter overrides from SOUL.md if agent.soul is set
+  if (parsed.agent?.soul) {
+    try {
+      const soulPath = resolve(vaultRoot, parsed.agent.soul);
+      const soulText = readFileSync(soulPath, "utf-8");
+      const fmMatch = soulText.match(/^---\n([\s\S]*?)\n---/);
+      if (fmMatch) {
+        const fm = parseYaml(fmMatch[1]) as Record<string, unknown>;
+        // Apply frontmatter overrides
+        if (fm.agent_label && typeof fm.agent_label === "string") {
+          parsed.github.agent_label = fm.agent_label;
+        }
+        if (fm.poll_interval_seconds && typeof fm.poll_interval_seconds === "number") {
+          parsed.github.poll_interval_seconds = fm.poll_interval_seconds;
+        }
+        if (fm.model && typeof fm.model === "string") {
+          parsed.executor.model = fm.model;
+        }
+        if (fm.timeout_seconds && typeof fm.timeout_seconds === "number") {
+          parsed.executor.timeout_seconds = fm.timeout_seconds;
+        }
+        if (fm.max_turns && typeof fm.max_turns === "number") {
+          parsed.executor.max_turns = fm.max_turns;
+        }
+        if (fm.retries != null && typeof fm.retries === "number") {
+          parsed.executor.retries = fm.retries;
+        }
+        if (fm.enable_teams != null) {
+          if (!parsed.teams) parsed.teams = { enable_agent_teams: false, max_teammates: 0 };
+          parsed.teams.enable_agent_teams = !!fm.enable_teams;
+        }
+        if (fm.max_teammates != null && typeof fm.max_teammates === "number") {
+          if (!parsed.teams) parsed.teams = { enable_agent_teams: false, max_teammates: 0 };
+          parsed.teams.max_teammates = fm.max_teammates;
+        }
+      }
+    } catch {
+      // SOUL.md not found or unreadable — use worker.yaml values
+    }
+  }
+
   return {
     ...parsed,
     _resolved_pre_hooks: resolveHookPaths(parsed.worker_pre_hooks, vaultRoot),
