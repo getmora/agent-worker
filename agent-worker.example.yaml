@@ -2,21 +2,15 @@
 # Copy this file and update with your own values:
 #   cp agent-worker.example.yaml agent-worker.yaml
 
-linear:
-  # Your Linear project UUID (required)
-  # Find it in Linear: Settings > Projects > click project > copy ID from URL
-  project_id: "your-project-uuid-here"
+github:
+  # GitHub repo in owner/name format (required)
+  repo: "your-org/your-repo"
 
-  # How often to poll Linear for new tickets, in seconds (default: 60)
+  # GitHub label that identifies issues for this agent (required)
+  agent_label: "agent:my-agent"
+
+  # How often to poll GitHub for new issues, in seconds (default: 60)
   poll_interval_seconds: 60
-
-  # Map your Linear workflow status names to agent lifecycle stages (required)
-  # These must match your Linear team's workflow status names exactly
-  statuses:
-    ready: "Todo"            # Status that marks a ticket as ready for the agent
-    in_progress: "In Progress" # Status set when the agent picks up a ticket
-    done: "Done"             # Status set when the agent completes a ticket
-    failed: "Canceled"       # Status set when the agent fails a ticket
 
 repo:
   # Absolute path to the git repository the agent works in (required)
@@ -25,19 +19,18 @@ repo:
 hooks:
   # Shell commands to run BEFORE the agent is invoked (optional)
   # If any command fails, the ticket is marked failed and the agent is not invoked
-  # Supports variables: {id} (ticket ID), {title} (slugified title), {branch} (branch name)
+  # Supports variables: {id}, {title}, {raw_title}, {branch}, {issue_number}, {agent_label}, {date}
   # Note: When using the Claude executor, a git worktree is created automatically
   # so you don't need branch/checkout commands in pre-hooks.
-  # Codex manages its own worktrees, so hooks run in the original repo path.
   pre: []
 
   # Shell commands to run AFTER the agent completes successfully (optional)
   # If any command fails, the ticket is marked failed
   post:
     - "git add -A"
-    - "git commit -m '{id}: {raw_title}'"
+    - "git commit -m '#{issue_number}: {raw_title}'"
     - "git push origin {branch}"
-    - "gh pr create --title '{id}: {raw_title}' --body 'Fixes {id}. Implemented by Agent Worker.' --base main"
+    - "gh pr create --title '#{issue_number}: {raw_title}' --body 'Fixes #{issue_number}. Implemented by Agent Worker.' --base main"
 
 executor:
   # Agent harness to use: "claude" (default) or "codex"

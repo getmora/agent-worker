@@ -20,7 +20,7 @@ export async function processTicket(options: {
 
   // Claim the ticket
   try {
-    await provider.transitionStatus(ticket.id, config.linear.statuses.in_progress);
+    await provider.transitionStatus(ticket.id, "in-progress");
     logger.info("Ticket claimed", { ticketId: ticket.identifier });
   } catch (err) {
     logger.warn("Failed to claim ticket", {
@@ -31,6 +31,28 @@ export async function processTicket(options: {
   }
 
   const executor = options.executor ?? createExecutor(config.executor.type);
+
+  // Set environment variables for worker hooks
+  const agentName = config.agent?.name ?? "";
+  process.env.AGENT_MODE = "1";
+  process.env.AGENT_NAME = agentName;
+  process.env.AGENT_LABEL = config.github.agent_label;
+  process.env.ISSUE_NUMBER = ticket.identifier;
+  process.env.ISSUE_TITLE = ticket.title;
+  process.env.ISSUE_BODY = ticket.description ?? "";
+  process.env.VAULT_DIR = config.repo.path;
+  process.env.GITHUB_REPO = config.github.repo;
+  if (config.teams) {
+    process.env.MAX_TEAMMATES = String(config.teams.max_teammates);
+  }
+
+  // Use worker hooks (resolved paths) if available, fall back to hooks.pre/post
+  const preHooks = config._resolved_pre_hooks.length > 0
+    ? config._resolved_pre_hooks
+    : config.hooks.pre;
+  const postHooks = config._resolved_post_hooks.length > 0
+    ? config._resolved_post_hooks
+    : config.hooks.post;
 
   // Run pipeline with retries
   let lastResult: Awaited<ReturnType<typeof executePipeline>> | undefined;
@@ -47,8 +69,8 @@ export async function processTicket(options: {
     try {
       lastResult = await executePipeline({
         ticket,
-        preHooks: config.hooks.pre,
-        postHooks: config.hooks.post,
+        preHooks,
+        postHooks,
         repoCwd: config.repo.path,
         executor,
         timeoutMs: config.executor.timeout_seconds * 1000,
@@ -73,7 +95,7 @@ export async function processTicket(options: {
   // Update final status
   try {
     if (lastResult?.success) {
-      await provider.transitionStatus(ticket.id, config.linear.statuses.done);
+      await provider.transitionStatus(ticket.id, "done");
 
       const output = lastNLines(lastResult.output ?? "", 50);
       const comment = [
@@ -86,7 +108,7 @@ export async function processTicket(options: {
 
       logger.info("Ticket completed", { ticketId: ticket.identifier });
     } else {
-      await provider.transitionStatus(ticket.id, config.linear.statuses.failed);
+      await provider.transitionStatus(ticket.id, "failed");
 
       const errorOutput = lastNLines(lastResult?.error ?? "Unknown error", 50);
       const comment = [
@@ -110,5 +132,11 @@ export async function processTicket(options: {
       ticketId: ticket.identifier,
       error: err instanceof Error ? err.message : String(err),
     });
+  } finally {
+    // Clean up env vars
+    delete process.env.AGENT_MODE;
+    delete process.env.ISSUE_NUMBER;
+    delete process.env.ISSUE_TITLE;
+    delete process.env.ISSUE_BODY;
   }
 }

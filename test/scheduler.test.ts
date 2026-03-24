@@ -13,29 +13,28 @@ const noopLogger: Logger = {
 };
 
 const ticket: Ticket = {
-  id: "uuid-1",
-  identifier: "ENG-100",
+  id: "42",
+  identifier: "42",
   title: "Test ticket",
   description: "Do something",
 };
 
 function makeConfig(overrides?: Partial<Config>): Config {
   return {
-    apiKey: "test-key",
-    linear: {
-      project_id: "proj-1",
+    github: {
+      repo: "getmora/Agent-Team",
+      agent_label: "agent:marketing",
       poll_interval_seconds: 10,
-      statuses: {
-        ready: "Todo",
-        in_progress: "In Progress",
-        done: "Done",
-        failed: "Canceled",
-      },
     },
     repo: { path: "/tmp" },
     hooks: { pre: [], post: [] },
     executor: { type: "claude", timeout_seconds: 5, retries: 0 },
     log: { level: "info" },
+    worker_pre_hooks: [],
+    worker_post_hooks: [],
+    _resolved_pre_hooks: [],
+    _resolved_post_hooks: [],
+    _config_dir: "/tmp",
     ...overrides,
   };
 }
@@ -80,7 +79,7 @@ describe("processTicket", () => {
   test("skips processing when claim fails", async () => {
     const { provider, transitions } = makeProvider({
       transitionStatus: async (_id, status) => {
-        if (status === "In Progress") throw new Error("Already claimed");
+        if (status === "in-progress") throw new Error("Already claimed");
         transitions.push(status);
       },
     });
@@ -107,8 +106,8 @@ describe("processTicket", () => {
       executor: mockExecutor({ success: true }),
     });
 
-    expect(transitions).toContain("In Progress");
-    expect(transitions).toContain("Canceled");
+    expect(transitions).toContain("in-progress");
+    expect(transitions).toContain("failed");
     expect(comments.length).toBe(1);
     expect(comments[0]).toContain("Agent Worker Failure");
     expect(comments[0]).toContain("pre-hook");
@@ -125,9 +124,9 @@ describe("processTicket", () => {
       executor: mockExecutor({ success: true, output: "all done" }),
     });
 
-    expect(transitions).toContain("In Progress");
-    expect(transitions).toContain("Done");
-    expect(transitions).not.toContain("Canceled");
+    expect(transitions).toContain("in-progress");
+    expect(transitions).toContain("done");
+    expect(transitions).not.toContain("failed");
     expect(comments.length).toBe(1);
     expect(comments[0]).toContain("Agent Worker Completed");
     expect(comments[0]).toContain("all done");
@@ -182,8 +181,8 @@ describe("processTicket", () => {
     });
 
     expect(callCount).toBe(2);
-    expect(transitions).toContain("Done");
-    expect(transitions).not.toContain("Canceled");
+    expect(transitions).toContain("done");
+    expect(transitions).not.toContain("failed");
   });
 
   test("transitions to failed after all retries exhausted", async () => {
@@ -209,8 +208,8 @@ describe("processTicket", () => {
 
     // retries: 2 means 3 total attempts (attempt 0, 1, 2)
     expect(callCount).toBe(3);
-    expect(transitions).toContain("Canceled");
-    expect(transitions).not.toContain("Done");
+    expect(transitions).toContain("failed");
+    expect(transitions).not.toContain("done");
     expect(comments.length).toBe(1);
     expect(comments[0]).toContain("Agent Worker Failure");
   });

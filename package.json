@@ -1,7 +1,7 @@
 {
   "name": "agent-worker",
   "version": "0.1.0",
-  "description": "A CLI tool that polls Linear for tickets and dispatches them to Claude Code for autonomous implementation.",
+  "description": "A CLI tool that polls GitHub Issues for tickets and dispatches them to Claude Code for autonomous implementation.",
   "module": "src/index.ts",
   "type": "module",
   "private": true,
@@ -21,7 +21,6 @@
     "typescript": "^5"
   },
   "dependencies": {
-    "@linear/sdk": "^77.0.0",
     "yaml": "^2.8.2",
     "zod": "^4.3.6"
   }

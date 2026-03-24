@@ -51,11 +51,25 @@ describe("buildTaskVars", () => {
     expect(vars.raw_title).toBe("Fix login bug");
     expect(vars.branch).toBe("agent/task-ENG-123");
     expect(vars.worktree).toBe("");
+    expect(vars.issue_number).toBe("ENG-123");
+    expect(vars.agent_label).toBe("");
+  });
+
+  test("builds vars with agentLabel option", () => {
+    const vars = buildTaskVars({
+      id: "uuid-123",
+      identifier: "42",
+      title: "Test",
+      description: undefined,
+    }, { agentLabel: "agent:ceo" });
+
+    expect(vars.issue_number).toBe("42");
+    expect(vars.agent_label).toBe("agent:ceo");
   });
 });
 
 describe("interpolate", () => {
-  const vars = { id: "ENG-123", title: "fix-login-bug", raw_title: "Fix login bug", branch: "agent/task-ENG-123", worktree: "/tmp/agent-worker-agent-task-ENG-123" };
+  const vars = { id: "ENG-123", title: "fix-login-bug", raw_title: "Fix login bug", branch: "agent/task-ENG-123", worktree: "/tmp/agent-worker-agent-task-ENG-123", issue_number: "ENG-123", agent_label: "agent:marketing" };
 
   test("replaces all variables", () => {
     expect(interpolate("git checkout -b {branch}", vars)).toBe(
@@ -91,6 +105,18 @@ describe("interpolate", () => {
   test("replaces {worktree} with the worktree path", () => {
     expect(interpolate("cd {worktree}", vars)).toBe(
       "cd /tmp/agent-worker-agent-task-ENG-123"
+    );
+  });
+
+  test("replaces {issue_number} with the issue number", () => {
+    expect(interpolate("gh issue view {issue_number}", vars)).toBe(
+      "gh issue view ENG-123"
+    );
+  });
+
+  test("replaces {agent_label} with the agent label", () => {
+    expect(interpolate("--label {agent_label}", vars)).toBe(
+      "--label agent:marketing"
     );
   });
 });

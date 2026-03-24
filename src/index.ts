@@ -1,7 +1,7 @@
 import { loadConfig } from "./config.ts";
 import { createLogger } from "./logger.ts";
 import { printSplash } from "./format.ts";
-import { createLinearProvider } from "./providers/linear.ts";
+import { createGitHubProvider } from "./providers/github.ts";
 import { createPoller } from "./poller.ts";
 import { processTicket } from "./scheduler.ts";
 import { version } from "../package.json";
@@ -36,30 +36,30 @@ function main() {
   const logger = createLogger({
     level: config.log.level,
     filePath: config.log.file,
-    redact: [config.apiKey],
   });
 
-  const provider = createLinearProvider({
-    apiKey: config.apiKey,
-    projectId: config.linear.project_id,
-    statuses: config.linear.statuses,
+  const provider = createGitHubProvider({
+    repo: config.github.repo,
+    agentLabel: config.github.agent_label,
   });
 
   const poller = createPoller({
     provider,
-    intervalMs: config.linear.poll_interval_seconds * 1000,
+    intervalMs: config.github.poll_interval_seconds * 1000,
     logger,
     onTicket: async (ticket) => {
       await processTicket({ ticket, provider, config, logger });
     },
   });
 
-  printSplash(config.executor.type);
-
   logger.info("Agent Worker started", {
-    projectId: config.linear.project_id,
-    pollInterval: config.linear.poll_interval_seconds,
+    agent: config.agent?.name ?? "(unnamed)",
+    repo: config.github.repo,
+    agentLabel: config.github.agent_label,
+    pollInterval: config.github.poll_interval_seconds,
     executor: config.executor.type,
+    workerPreHooks: config._resolved_pre_hooks.length,
+    workerPostHooks: config._resolved_post_hooks.length,
   });
 
   process.on("SIGINT", () => {

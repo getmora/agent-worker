@@ -1,18 +1,19 @@
 import { readFileSync } from "fs";
+import { dirname, resolve } from "path";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod/v4";
 
-const StatusesSchema = z.object({
-  ready: z.string(),
-  in_progress: z.string(),
-  done: z.string(),
-  failed: z.string(),
-});
+const AgentSchema = z.object({
+  name: z.string(),
+  soul: z.string().optional(),
+  heartbeat: z.string().optional(),
+  tools: z.string().optional(),
+}).optional();
 
-const LinearSchema = z.object({
-  project_id: z.string(),
+const GitHubSchema = z.object({
+  repo: z.string(),
+  agent_label: z.string(),
   poll_interval_seconds: z.number().positive().default(60),
-  statuses: StatusesSchema,
 });
 
 const RepoSchema = z.object({
@@ -26,8 +27,10 @@ const HooksSchema = z.object({
 
 const ExecutorSchema = z.object({
   type: z.enum(["claude", "codex"]).default("claude"),
+  model: z.string().optional(),
   timeout_seconds: z.number().positive().default(300),
   retries: z.number().int().min(0).max(3).default(0),
+  max_turns: z.number().int().positive().optional(),
 }).default({ type: "claude", timeout_seconds: 300, retries: 0 });
 
 const LogSchema = z.object({
@@ -35,28 +38,57 @@ const LogSchema = z.object({
   level: z.enum(["debug", "info", "warn", "error"]).default("info"),
 }).default({ level: "info" });
 
+const HarnessSchema = z.object({
+  max_phase_retries: z.number().int().min(0).default(3),
+}).optional();
+
+const TeamsSchema = z.object({
+  enable_agent_teams: z.boolean().default(false),
+  max_teammates: z.number().int().min(0).default(0),
+  teammate_model: z.string().optional(),
+}).optional();
+
 const ConfigFileSchema = z.object({
-  linear: LinearSchema,
+  agent: AgentSchema,
+  github: GitHubSchema,
   repo: RepoSchema,
   hooks: HooksSchema,
   executor: ExecutorSchema,
   log: LogSchema,
+  worker_pre_hooks: z.array(z.string()).default([]),
+  worker_post_hooks: z.array(z.string()).default([]),
+  claude_hooks: z.record(z.array(z.string())).optional(),
+  harness: HarnessSchema,
+  teams: TeamsSchema,
 });
 
 type ConfigFile = z.infer<typeof ConfigFileSchema>;
 
 export type Config = ConfigFile & {
-  apiKey: string;
+  /** Resolved absolute paths to worker hook scripts */
+  _resolved_pre_hooks: string[];
+  _resolved_post_hooks: string[];
+  /** Directory containing the config file (for resolving relative paths) */
+  _config_dir: string;
 };
 
-export function loadConfig(filePath: string): Config {
-  const apiKey = process.env.LINEAR_API_KEY;
-  if (!apiKey) {
-    throw new Error("LINEAR_API_KEY environment variable is required");
-  }
+/**
+ * Resolve a hook name to an absolute script path.
+ * Looks in hooks/worker/ relative to the vault root (repo.path or config dir parent).
+ */
+function resolveHookPaths(hookNames: string[], vaultRoot: string): string[] {
+  return hookNames.map((name) => {
+    // If already an absolute path or command, pass through
+    if (name.startsWith("/") || name.includes(" ")) return name;
+    // Resolve to hooks/worker/{name}.sh
+    return resolve(vaultRoot, "hooks", "worker", `${name}.sh`);
+  });
+}
 
+export function loadConfig(filePath: string): Config {
   const text = readFileSync(filePath, "utf-8");
   const raw = parseYaml(text) as Record<string, unknown>;
+  const configDir = dirname(resolve(filePath));
 
   // Backward compat: map `claude` key to `executor` with type "claude"
   if (raw.claude && !raw.executor) {
@@ -66,5 +98,13 @@ export function loadConfig(filePath: string): Config {
 
   const parsed = ConfigFileSchema.parse(raw);
 
-  return { ...parsed, apiKey };
+  // Determine vault root for hook resolution
+  const vaultRoot = parsed.repo?.path || resolve(configDir, "..", "..");
+
+  return {
+    ...parsed,
+    _resolved_pre_hooks: resolveHookPaths(parsed.worker_pre_hooks, vaultRoot),
+    _resolved_post_hooks: resolveHookPaths(parsed.worker_post_hooks, vaultRoot),
+    _config_dir: configDir,
+  };
 }
