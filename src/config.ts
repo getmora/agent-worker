@@ -18,7 +18,7 @@ const GitHubSchema = z.object({
 
 const RepoSchema = z.object({
   path: z.string(),
-});
+}).optional();
 
 const HooksSchema = z.object({
   pre: z.array(z.string()).default([]),
@@ -57,7 +57,7 @@ const ConfigFileSchema = z.object({
   log: LogSchema,
   worker_pre_hooks: z.array(z.string()).default([]),
   worker_post_hooks: z.array(z.string()).default([]),
-  claude_hooks: z.record(z.array(z.string())).optional(),
+  claude_hooks: z.any().optional(),
   harness: HarnessSchema,
   teams: TeamsSchema,
 });
@@ -70,6 +70,8 @@ export type Config = ConfigFile & {
   _resolved_post_hooks: string[];
   /** Directory containing the config file (for resolving relative paths) */
   _config_dir: string;
+  /** Vault root directory (repo.path or derived from config location) */
+  _vault_root: string;
 };
 
 /**
@@ -106,5 +108,6 @@ export function loadConfig(filePath: string): Config {
     _resolved_pre_hooks: resolveHookPaths(parsed.worker_pre_hooks, vaultRoot),
     _resolved_post_hooks: resolveHookPaths(parsed.worker_post_hooks, vaultRoot),
     _config_dir: configDir,
+    _vault_root: vaultRoot,
   };
 }

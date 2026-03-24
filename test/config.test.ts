@@ -139,13 +139,15 @@ repo:
     expect(() => loadConfig(writeConfig(yaml))).toThrow();
   });
 
-  test("throws on missing repo path", () => {
+  test("derives vault root from config location when repo omitted", () => {
     const yaml = `
 github:
   repo: "getmora/Agent-Team"
   agent_label: "agent:marketing"
 `;
-    expect(() => loadConfig(writeConfig(yaml))).toThrow();
+    const config = loadConfig(writeConfig(yaml));
+    expect(config._vault_root).toBeTruthy();
+    expect(config.repo).toBeUndefined();
   });
 
   test("rejects retries greater than 3", () => {

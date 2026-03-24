@@ -35,6 +35,7 @@ function makeConfig(overrides?: Partial<Config>): Config {
     _resolved_pre_hooks: [],
     _resolved_post_hooks: [],
     _config_dir: "/tmp",
+    _vault_root: "/tmp",
     ...overrides,
   };
 }

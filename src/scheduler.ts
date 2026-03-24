@@ -40,7 +40,7 @@ export async function processTicket(options: {
   process.env.ISSUE_NUMBER = ticket.identifier;
   process.env.ISSUE_TITLE = ticket.title;
   process.env.ISSUE_BODY = ticket.description ?? "";
-  process.env.VAULT_DIR = config.repo.path;
+  process.env.VAULT_DIR = config._vault_root;
   process.env.GITHUB_REPO = config.github.repo;
   if (config.teams) {
     process.env.MAX_TEAMMATES = String(config.teams.max_teammates);
@@ -71,7 +71,7 @@ export async function processTicket(options: {
         ticket,
         preHooks,
         postHooks,
-        repoCwd: config.repo.path,
+        repoCwd: config._vault_root,
         executor,
         timeoutMs: config.executor.timeout_seconds * 1000,
         logger,
