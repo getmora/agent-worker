@@ -1,5 +1,5 @@
 import type { Logger } from "../logger.ts";
-import { createClaudeExecutor } from "./claude-executor.ts";
+import { createClaudeExecutor, type ClaudeExecutorOptions } from "./claude-executor.ts";
 import { createCodexExecutor } from "./codex-executor.ts";
 
 export type ExecutorResult = {
@@ -44,13 +44,24 @@ export async function streamToLines(
   return chunks.join("");
 }
 
-export function createExecutor(type: "claude" | "codex"): CodeExecutor {
-  switch (type) {
+export type ExecutorConfig = {
+  type: "claude" | "codex";
+  mode?: "print" | "conversation";
+  model?: string;
+  max_turns?: number;
+};
+
+export function createExecutor(config: ExecutorConfig): CodeExecutor {
+  switch (config.type) {
     case "claude":
-      return createClaudeExecutor();
+      return createClaudeExecutor({
+        mode: config.mode ?? "print",
+        model: config.model,
+        maxTurns: config.max_turns,
+      });
     case "codex":
       return createCodexExecutor();
     default:
-      throw new Error(`Unknown executor type: ${type}`);
+      throw new Error(`Unknown executor type: ${config.type}`);
   }
 }

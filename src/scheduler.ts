@@ -30,7 +30,12 @@ export async function processTicket(options: {
     return;
   }
 
-  const executor = options.executor ?? createExecutor(config.executor.type);
+  const executor = options.executor ?? createExecutor({
+    type: config.executor.type,
+    mode: config.executor.mode,
+    model: config.executor.model,
+    max_turns: config.executor.max_turns,
+  });
 
   // Set environment variables for worker hooks
   const agentName = config.agent?.name ?? "";

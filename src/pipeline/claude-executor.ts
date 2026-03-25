@@ -2,18 +2,37 @@ import type { Logger } from "../logger.ts";
 import type { CodeExecutor, ExecutorResult } from "./executor.ts";
 import { streamToLines } from "./executor.ts";
 
-export function createClaudeExecutor(): CodeExecutor {
+export type ClaudeExecutorOptions = {
+  mode: "print" | "conversation";
+  model?: string;
+  maxTurns?: number;
+};
+
+export function createClaudeExecutor(options?: ClaudeExecutorOptions): CodeExecutor {
+  const mode = options?.mode ?? "print";
+
   return {
     name: "claude",
     needsWorktree: false,
     async run(prompt: string, cwd: string, timeoutMs: number, logger: Logger): Promise<ExecutorResult> {
-      logger.info("Claude Code started", { timeoutMs });
+      logger.info("Claude Code started", { mode, timeoutMs });
 
-      const proc = Bun.spawn(["claude", "--print", "--dangerously-skip-permissions", "-p", prompt], {
+      const args = buildArgs(mode, prompt, options);
+      logger.info("Claude Code args", { args: args.join(" ") });
+
+      const proc = Bun.spawn(args, {
         cwd,
+        stdin: mode === "conversation" ? "pipe" : undefined,
         stdout: "pipe",
         stderr: "pipe",
       });
+
+      // In conversation mode, write prompt to stdin and close it
+      if (mode === "conversation" && proc.stdin) {
+        const writer = proc.stdin.getWriter();
+        await writer.write(new TextEncoder().encode(prompt));
+        await writer.close();
+      }
 
       let timedOut = false;
       const timer = setTimeout(() => {
@@ -49,4 +68,26 @@ export function createClaudeExecutor(): CodeExecutor {
       return { success: exitCode === 0, output, timedOut: false, exitCode };
     },
   };
+}
+
+function buildArgs(mode: "print" | "conversation", prompt: string, options?: ClaudeExecutorOptions): string[] {
+  const args = ["claude"];
+
+  if (mode === "print") {
+    // Single-shot mode: pass prompt as argument
+    args.push("--print", "--dangerously-skip-permissions", "-p", prompt);
+  } else {
+    // Conversation mode: prompt piped via stdin, supports TeamCreate/SendMessage
+    args.push("--dangerously-skip-permissions");
+  }
+
+  if (options?.model) {
+    args.push("--model", options.model);
+  }
+
+  if (options?.maxTurns) {
+    args.push("--max-turns", String(options.maxTurns));
+  }
+
+  return args;
 }
